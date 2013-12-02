@@ -31,7 +31,6 @@
 import sys
 import subprocess
 
-# TODO: parse this out of the Compile Unit line
 pointer_size = 8
 
 input_file = None
@@ -463,11 +462,24 @@ types = {}
 
 lines = []
 
+# TODO: it would probably be a lot faster to change the
+# parser to just use the file object instead of reading
+# the whole file up-front
+
 for l in f.stdout:
 	lines.append(l)
 
 lno = 0
 items = []
+
+while lno < len(lines):
+	l = lines[lno]
+	lno += 1
+	if 'Compile Unit:' in l and 'addr_size =' in l:
+		pointer_size = int(l.split('addr_size =')[1].strip().split(' ', 1)[0], 16)
+		print 'pointer-size: %d' % pointer_size
+		break
+
 while lno < len(lines):
 	lno, tree = parse_recursive(lno, lines)
 	if tree != None: items.append(tree)
