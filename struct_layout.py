@@ -30,6 +30,7 @@
 
 import sys
 import subprocess
+from operator import attrgetter
 
 pointer_size = 8
 
@@ -246,6 +247,8 @@ class DwarfStructType:
 			print 'EXCEPTION! %s: ' % self._name , e
 			pass
 
+		self._fields = sorted(self._fields, key=attrgetter('_offset'))
+
 	def size(self):
 		return self._size
 
@@ -268,7 +271,7 @@ class DwarfStructType:
 
 	def print_fields(self, offset, expected, indent):
 		for f in self._fields:
-			expected = f.print_field(offset, expected, indent)
+			expected = max(expected, f.print_field(offset, expected, indent))
 		return expected
 
 	def has_fields(self):
@@ -294,11 +297,6 @@ class DwarfUnionType(DwarfStructType):
 	def print_struct(self):
 		print '\nunion %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
 		self.print_fields(0, 0, 0)
-
-	def print_fields(self, offset, expected, indent):
-		for f in self._fields:
-			expected = max(expected, f.print_field(offset, expected, indent))
-		return expected
 
 class DwarfMemberPtrType(DwarfTypedef):
 
