@@ -218,6 +218,7 @@ class DwarfStructType:
 	def __init__(self, item, scope, types):
 		self._scope = scope
 		self._types = types
+		self._declaration = 'AT_declaration' in item['fields']
 
 		if 'AT_declaration' in item['fields']:
 			self._size = 0
@@ -256,6 +257,8 @@ class DwarfStructType:
 		return self._name
 
 	def print_struct(self):
+		if self._declaration: return
+
 		global color_output
 		if color_output:
 			print '\nstruct \x1b[1m%s::%s\x1b[0m [%d Bytes]' % (self._scope, self._name, self._size)
@@ -279,6 +282,8 @@ class DwarfStructType:
 		else: return False
 
 	def match(self, f):
+		if self._declaration: return False
+
 		typename = '%s::%s' % (self._scope, self._name)
 
 		global show_standard_types
