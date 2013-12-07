@@ -30,9 +30,10 @@
 
 import sys
 import subprocess
+import os
 from operator import attrgetter
 
-pointer_size = 8
+pointer_size = None
 
 input_file = None
 filter_str = ''
@@ -421,10 +422,11 @@ def collect_types(tree, scope, types):
 				collect_types(c, scope, types)
 
 def print_usage():
-	print 'usage: %s [options] object-file [name-prefix-filter]\n' % sys.argv[0]
-	print 'object-file must have DWARF debug symbols in it. It'
-	print 'may be some other file format that holds debug symbols'
-	print 'too.'
+	print 'usage: %s [options] exe-file [name-prefix-filter]\n' % sys.argv[0]
+	print 'exe-file must have DWARF debug symbols in it. It'
+	print 'may be an object file, shared library or executable. On Mac'
+	print 'dsymutils will be invoked for files with no direct debug symbols'
+	print 'in them.'
 	print ''
 	print 'name-prefix-filter is an optional argument. When'
 	print 'specified, only types whose prefix matches this are'
@@ -432,14 +434,59 @@ def print_usage():
 	print 'to denote the global scope.'
 	print ''
 	print 'OPTIONS'
-	print '-a     print all types, including standard library'
-	print '       and implementation detail types'
-	print '-c     disable color output'
+	print '-a           print all types, including standard library'
+	print '             and implementation detail types'
+	print '-c           disable color output'
 	print ''
 	print 'the dwarfdump tool is a dependency and need to be'
-	print 'installed on your system'
+	print 'installed on your system. On Mac OS X you may need dsymutil'
+	print 'in order to link debug symbols together'
 	sys.exit(1)
 
+def process_dwarf_file(input_file):
+	global pointer_size
+
+	f = subprocess.Popen(['dwarfdump', input_file], stdout=subprocess.PIPE)
+
+	types = {}
+
+	lines = []
+
+	# TODO: it would probably be a lot faster to change the
+	# parser to just use the file object instead of reading
+	# the whole file up-front
+
+	for l in f.stdout:
+		lines.append(l)
+
+	lno = 0
+	items = []
+
+	while lno < len(lines):
+		l = lines[lno]
+		lno += 1
+		if 'Compile Unit:' in l and 'addr_size =' in l:
+			pointer_size = int(l.split('addr_size =')[1].strip().split(' ', 1)[0], 16)
+			print 'pointer-size: %d' % pointer_size
+			break
+
+	if pointer_size == None:
+		return False
+
+	while lno < len(lines):
+		lno, tree = parse_recursive(lno, lines)
+		if tree != None: items.append(tree)
+	
+	for i in items:
+		collect_types(i, '', types)
+
+	for a,t in types.items():
+		if not t.match(filter_str): continue
+		t.print_struct()
+
+	return True
+
+# parse command line arguments
 i = 1
 
 while i < len(sys.argv):
@@ -459,38 +506,12 @@ if len(sys.argv) > i:
 	filter_str = sys.argv[i]
 	i += 1
 
-f = subprocess.Popen(['dwarfdump', input_file], stdout=subprocess.PIPE)
-
-types = {}
-
-lines = []
-
-# TODO: it would probably be a lot faster to change the
-# parser to just use the file object instead of reading
-# the whole file up-front
-
-for l in f.stdout:
-	lines.append(l)
-
-lno = 0
-items = []
-
-while lno < len(lines):
-	l = lines[lno]
-	lno += 1
-	if 'Compile Unit:' in l and 'addr_size =' in l:
-		pointer_size = int(l.split('addr_size =')[1].strip().split(' ', 1)[0], 16)
-		print 'pointer-size: %d' % pointer_size
-		break
-
-while lno < len(lines):
-	lno, tree = parse_recursive(lno, lines)
-	if tree != None: items.append(tree)
-
-for i in items:
-	collect_types(i, '', types)
-
-for a,t in types.items():
-	if not t.match(filter_str): continue
-	t.print_struct()
+# if it fails, it may be because we're on Mac OS and
+# trying to read debug symbols from an executable
+if not process_dwarf_file(input_file):
+	dwarf_file = input_file + '.dwarf'
+	if not os.path.exists(dwarf_file) \
+		or os.stat(input_file).st_mtime > os.stat(dwarf_file).st_mtime:
+		subprocess.call(['dsymutil', '--flat', input_file]);
+	process_dwarf_file(dwarf_file)
 
