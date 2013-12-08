@@ -75,7 +75,8 @@ class DwarfTypedef:
 		return self._types[self._underlying_type].match(f)
 
 	def print_struct(self):
-		pass
+		if self._underlying_type == 0: return
+		self._types[self._underlying_type].print_struct()
 
 class DwarfVoidType:
 
@@ -228,21 +229,37 @@ class DwarfMember:
 			else:
 				print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
 			expected = self._offset + offset
-		if t.has_fields():
-			print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
-			return t.print_fields(self._offset + offset, expected, indent + 1, prof)
-		else:
-			print '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
-			if prof != None and self._offset in prof:
+
+		if prof != None:
+			# access profile mode
+			if t.has_fields():
+				print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
+				return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+			else:
+				if self._offset < expected:
+					print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
+					return self._offset + offset + t.size()
+
+				if self._offset in prof: cnt = prof[self._offset]
+				else: cnt = 0
 				if color_output:
 					col = '\x1b[33m'
 					restore = '\x1b[0m'
 				else:
 					col = ''
 					restore = ''
-				print '%s%8d: %s%s' % (col, prof[self._offset], \
-					print_bar(prof[self._offset], prof['max']), restore)
+				print '%s%8d: %s%s %s%s' % (col, cnt, \
+					print_bar(cnt, prof['max']), restore, \
+					(' ' * indent), self._name)
 			return self._offset + offset + t.size()
+		else:
+			# normal struct layout mode
+			if t.has_fields():
+				print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
+				return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+			else:
+				print '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
+				return self._offset + offset + t.size()
 
 class DwarfStructType:
 
@@ -292,7 +309,8 @@ class DwarfStructType:
 
 		global profile
 		if profile != None:
-			prof = profile[('%s::%s' % (self._scope, self._name))[2:]]
+			prof_name = '%s::%s' % (self._scope, self._name)
+			prof = profile[prof_name[2:]]
 		else:
 			prof = None
 
@@ -466,16 +484,18 @@ def collect_types(tree, scope, types):
 
 def print_bar(val, maximum):
 
-	width = 100
+	width = 50
 
 	# blocks from 'full' to empty
-	blocks = [u'\u2588', u'\u2589', u'\u258A', u'\u258B', u'\u258C', u'\u258D', u'\u258E', u'\u258F', u' ']
+	blocks = [
+		u' ', u'\u258F', u'\u258E', u'\u258D', u'\u258C' \
+		, u'\u258B', u'\u258A', u'\u2589', u'\u2588']
 
 	s = u''
 
-	num_blocks = val * width / maximum
+	num_blocks = val * width / float(maximum)
 	while num_blocks > 1.0:
-		s += blocks[0]
+		s += blocks[8]
 		num_blocks -= 1.0
 
 	s += blocks[int(num_blocks * 8)]
@@ -484,7 +504,7 @@ def print_bar(val, maximum):
 
 	s += u'|'
 
-	return s
+	return s.encode('utf-8')
 
 
 def print_usage():
