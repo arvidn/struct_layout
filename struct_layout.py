@@ -233,11 +233,17 @@ class DwarfMember:
 		if prof != None:
 			# access profile mode
 			if t.has_fields():
-				print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
-				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size():
+				name_field = '%s%s' % ((' ' * indent), self._name)
+				print '%-81s|' % name_field
+				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size() \
+					and t.has_fields():
 					return t.print_fields(self._offset + offset, expected, indent + 1, prof)
 				return self._offset + offset + t.size()
 			else:
+
+				# a base class with no members. don't waste space by printing it
+				if self._name == '<base-class>':
+					return self._offset + offset + t.size()
 
 				if color_output:
 					col = '\x1b[33m'
@@ -252,13 +258,17 @@ class DwarfMember:
 					member_offset = prof[0][0] - self._offset - offset
 					if member_offset != 0: moff = '%+d' % member_offset
 					else: moff = ''
-					print '%s%8d: %s%s %s%s%s' % (col, cnt, \
+					name_field = '%s%s%s' % ((' ' * indent), self._name, moff)
+					print '%-20s %s%8d: %s%s| ' % (\
+						name_field, \
+						col, cnt, \
 						print_bar(cnt, prof_max), restore, \
-						(' ' * indent), self._name, moff)
+						)
 					num_printed += 1
 					del prof[0]
 				if num_printed == 0:
-					print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
+					name_field = '%s%s' % ((' ' * indent), self._name)
+					print '%-81s|' % name_field
 
 			return self._offset + offset + t.size()
 		else:
@@ -511,7 +521,7 @@ def print_bar(val, maximum):
 
 	width = 50
 
-	# blocks from 'full' to empty
+	# blocks from empty to full (left to right)
 	blocks = [
 		u' ', u'\u258F', u'\u258E', u'\u258D', u'\u258C' \
 		, u'\u258B', u'\u258A', u'\u2589', u'\u2588']
@@ -526,8 +536,6 @@ def print_bar(val, maximum):
 	s += blocks[int(num_blocks * 8)]
 
 	s += u' ' * (width - len(s))
-
-	s += u'|'
 
 	return s.encode('utf-8')
 
