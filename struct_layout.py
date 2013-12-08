@@ -38,6 +38,7 @@ pointer_size = None
 input_file = None
 filter_str = ''
 profile = None
+prof_max = 0
 
 show_standard_types = False
 color_output = True
@@ -151,6 +152,11 @@ class DwarfReferenceType(DwarfTypedef):
 	def has_fields(self):
 		return False
 
+class DwarfRVReferenceType(DwarfReferenceType):
+
+	def name(self):
+		return DwarfTypedef.name(self) + '&&'
+
 class DwarfArrayType:
 
 	def __init__(self, item, scope, types):
@@ -223,37 +229,47 @@ class DwarfMember:
 		t = self._types[self._underlying_type]
 		num_padding = (self._offset + offset) - expected
 		global color_output
-		if num_padding > 0:
-			if color_output:
-				print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
-			else:
-				print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
-			expected = self._offset + offset
 
 		if prof != None:
 			# access profile mode
 			if t.has_fields():
 				print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
-				return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size():
+					return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+				return self._offset + offset + t.size()
 			else:
-				if self._offset < expected:
-					print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
-					return self._offset + offset + t.size()
 
-				if self._offset in prof: cnt = prof[self._offset]
-				else: cnt = 0
 				if color_output:
 					col = '\x1b[33m'
 					restore = '\x1b[0m'
 				else:
 					col = ''
 					restore = ''
-				print '%s%8d: %s%s %s%s' % (col, cnt, \
-					print_bar(cnt, prof['max']), restore, \
-					(' ' * indent), self._name)
+				num_printed = 0
+				global prof_max
+				while len(prof) > 0 and prof[0][0] < self._offset + offset + t.size():
+					cnt = prof[0][1]
+					member_offset = prof[0][0] - self._offset - offset
+					if member_offset != 0: moff = '%+d' % member_offset
+					else: moff = ''
+					print '%s%8d: %s%s %s%s%s' % (col, cnt, \
+						print_bar(cnt, prof_max), restore, \
+						(' ' * indent), self._name, moff)
+					num_printed += 1
+					del prof[0]
+				if num_printed == 0:
+					print '%s| %s%s' % (' ' * 60, ' ' * indent, self._name)
+
 			return self._offset + offset + t.size()
 		else:
 			# normal struct layout mode
+			if num_padding > 0:
+				if color_output:
+					print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
+				else:
+					print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
+				expected = self._offset + offset
+
 			if t.has_fields():
 				print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
 				return t.print_fields(self._offset + offset, expected, indent + 1, prof)
@@ -308,11 +324,17 @@ class DwarfStructType:
 		if self._declaration: return
 
 		global profile
+		prof = None
 		if profile != None:
 			prof_name = '%s::%s' % (self._scope, self._name)
-			prof = profile[prof_name[2:]]
-		else:
-			prof = None
+			cnts = profile[prof_name[2:]]
+			if cnts != None:
+				prof = []
+				for k, v in cnts.items():
+					# don't show access counters < 1% of max
+					if v < prof_max / 100: continue
+					prof.append((k, v))
+				prof = sorted(prof)
 
 		global color_output
 		if color_output:
@@ -320,12 +342,14 @@ class DwarfStructType:
 		else:
 			print '\nstruct %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
 		expected = self.print_fields(0, 0, 0, prof)
-		num_padding = (self._size) - expected
-		if num_padding > 0:
-			if color_output:
-				print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
-			else:
-				print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
+
+		if profile == None:
+			num_padding = (self._size) - expected
+			if num_padding > 0:
+				if color_output:
+					print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
+				else:
+					print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
 
 	def print_fields(self, offset, expected, indent, prof):
 		for f in self._fields:
@@ -383,6 +407,7 @@ tag_to_type = {
 	'TAG_base_type': DwarfBaseType,
 	'TAG_pointer_type': DwarfPointerType,
 	'TAG_reference_type': DwarfReferenceType,
+	'TAG_rvalue_reference_type': DwarfRVReferenceType,
 	'TAG_typedef': DwarfTypedef,
 	'TAG_array_type': DwarfArrayType,
 	'TAG_const_type': DwarfConstType,
@@ -555,7 +580,6 @@ def process_dwarf_file(input_file):
 		lno += 1
 		if 'Compile Unit:' in l and 'addr_size =' in l:
 			pointer_size = int(l.split('addr_size =')[1].strip().split(' ', 1)[0], 16)
-			print 'pointer-size: %d' % pointer_size
 			break
 
 	if pointer_size == None:
@@ -576,8 +600,8 @@ def process_dwarf_file(input_file):
 
 def parse_profile(it):
 
+	global prof_max
 	ret = {}
-	m = 0;
 	for l in it:
 		if l.strip() == '': break
 
@@ -587,10 +611,10 @@ def parse_profile(it):
 		offset, count = l.strip().split(':')
 		offset = int(offset)
 		count = int(count)
-		if count > m: m = count
+		if count > prof_max:
+			prof_max = count
 
 		ret[offset] = count
-	ret['max'] = m
 	return ret
 
 # parse command line arguments
