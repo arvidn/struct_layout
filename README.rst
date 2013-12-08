@@ -21,11 +21,12 @@ usage
 
 ::
 
-	usage: ./struct_layout.py [options] object-file [name-prefix-filter]
+	usage: ./struct_layout.py [options] exe-file [name-prefix-filter]
 	
-	object-file must have DWARF debug symbols in it. It
-	may be some other file format that holds debug symbols
-	too.
+	exe-file must have DWARF debug symbols in it. It
+	may be an object file, shared library or executable. On Mac
+	dsymutils will be invoked for files with no direct debug symbols
+	in them.
 	
 	name-prefix-filter is an optional argument. When
 	specified, only types whose prefix matches this are
@@ -33,12 +34,15 @@ usage
 	to denote the global scope.
 	
 	OPTIONS
-	-a     print all types, including standard library
-	       and implementation detail types
-	-c     disable color output
+	-a           print all types, including standard library
+	             and implementation detail types
+	-c           disable color output
+	-p <file>    use the specified access_profile output file
+	             to display use counts for only instrumented types
 	
 	the dwarfdump tool is a dependency and need to be
-	installed on your system
+	installed on your system. On Mac OS X you may need dsymutil
+	in order to link debug symbols together
 
 Output is colorized by default, use ``-c`` to disable.
 Types belonging to the standard library and compiler specific libraries
@@ -48,6 +52,10 @@ The optional filter simply filters the prefix of types. This is primarily
 useful if you're only interested in types from a specific namespace. For
 instance, passing in ``::boost::`` will only print types defined in the
 ``boost`` namespace.
+
+The ``-p`` option takes the profile output generated from access_profiler_.
+
+.. _access_profiler: https://github.com/arvidn/access_profiler
 
 example output
 --------------

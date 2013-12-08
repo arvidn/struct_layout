@@ -37,6 +37,7 @@ pointer_size = None
 
 input_file = None
 filter_str = ''
+profile = None
 
 show_standard_types = False
 color_output = True
@@ -65,13 +66,33 @@ class DwarfTypedef:
 		if self._underlying_type == 0: return False
 		return self._types[self._underlying_type].has_fields()
 
-	def print_fields(self, offset, expected, indent):
+	def print_fields(self, offset, expected, indent, prof):
 		if self._underlying_type == 0: return 0
-		return self._types[self._underlying_type].print_fields(offset, expected, indent)
+		return self._types[self._underlying_type].print_fields(offset, expected, indent, prof)
 
 	def match(self, f):
 		if self._underlying_type == 0: return False
 		return self._types[self._underlying_type].match(f)
+
+	def print_struct(self):
+		pass
+
+class DwarfVoidType:
+
+	def __init__(self, item, scope, types):
+		pass
+
+	def name(self):
+		return 'void'
+
+	def has_fields(self):
+		return False
+
+	def size(self):
+		return 0
+
+	def match(self, f):
+		return False
 
 	def print_struct(self):
 		pass
@@ -197,11 +218,11 @@ class DwarfMember:
 		else:
 			self._name = '<base-class>'
 
-	def print_field(self, offset, expected, indent):
+	def print_field(self, offset, expected, indent, prof):
 		t = self._types[self._underlying_type]
 		num_padding = (self._offset + offset) - expected
+		global color_output
 		if num_padding > 0:
-			global color_output
 			if color_output:
 				print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
 			else:
@@ -209,9 +230,18 @@ class DwarfMember:
 			expected = self._offset + offset
 		if t.has_fields():
 			print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
-			return t.print_fields(self._offset + offset, expected, indent + 1)
+			return t.print_fields(self._offset + offset, expected, indent + 1, prof)
 		else:
 			print '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
+			if prof != None and self._offset in prof:
+				if color_output:
+					col = '\x1b[33m'
+					restore = '\x1b[0m'
+				else:
+					col = ''
+					restore = ''
+				print '%s%8d: %s%s' % (col, prof[self._offset], \
+					print_bar(prof[self._offset], prof['max']), restore)
 			return self._offset + offset + t.size()
 
 class DwarfStructType:
@@ -260,12 +290,18 @@ class DwarfStructType:
 	def print_struct(self):
 		if self._declaration: return
 
+		global profile
+		if profile != None:
+			prof = profile[('%s::%s' % (self._scope, self._name))[2:]]
+		else:
+			prof = None
+
 		global color_output
 		if color_output:
 			print '\nstruct \x1b[1m%s::%s\x1b[0m [%d Bytes]' % (self._scope, self._name, self._size)
 		else:
 			print '\nstruct %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
-		expected = self.print_fields(0, 0, 0)
+		expected = self.print_fields(0, 0, 0, prof)
 		num_padding = (self._size) - expected
 		if num_padding > 0:
 			if color_output:
@@ -273,9 +309,9 @@ class DwarfStructType:
 			else:
 				print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
 
-	def print_fields(self, offset, expected, indent):
+	def print_fields(self, offset, expected, indent, prof):
 		for f in self._fields:
-			expected = max(expected, f.print_field(offset, expected, indent))
+			expected = max(expected, f.print_field(offset, expected, indent, prof))
 		return expected
 
 	def has_fields(self):
@@ -286,6 +322,12 @@ class DwarfStructType:
 		if self._declaration: return False
 
 		typename = '%s::%s' % (self._scope, self._name)
+
+		global profile
+		if profile != None:
+			# strip the :: prefix to match the names in the profile
+			name = typename[2:]
+			return name in profile
 
 		global show_standard_types
 		if not show_standard_types:
@@ -302,7 +344,7 @@ class DwarfUnionType(DwarfStructType):
 
 	def print_struct(self):
 		print '\nunion %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
-		self.print_fields(0, 0, 0)
+		self.print_fields(0, 0, 0, None)
 
 class DwarfMemberPtrType(DwarfTypedef):
 
@@ -333,6 +375,7 @@ tag_to_type = {
 	'TAG_enumeration_type': DwarfEnumType,
 	'TAG_subroutine_type': DwarfFunPtrType,
 	'TAG_union_type': DwarfUnionType,
+	'TAG_unspecified_type': DwarfVoidType,
 }
 
 def parse_tag(lno, lines):
@@ -421,6 +464,29 @@ def collect_types(tree, scope, types):
 			for c in tree['children']:
 				collect_types(c, scope, types)
 
+def print_bar(val, maximum):
+
+	width = 100
+
+	# blocks from 'full' to empty
+	blocks = [u'\u2588', u'\u2589', u'\u258A', u'\u258B', u'\u258C', u'\u258D', u'\u258E', u'\u258F', u' ']
+
+	s = u''
+
+	num_blocks = val * width / maximum
+	while num_blocks > 1.0:
+		s += blocks[0]
+		num_blocks -= 1.0
+
+	s += blocks[int(num_blocks * 8)]
+
+	s += u' ' * (width - len(s))
+
+	s += u'|'
+
+	return s
+
+
 def print_usage():
 	print 'usage: %s [options] exe-file [name-prefix-filter]\n' % sys.argv[0]
 	print 'exe-file must have DWARF debug symbols in it. It'
@@ -437,6 +503,8 @@ def print_usage():
 	print '-a           print all types, including standard library'
 	print '             and implementation detail types'
 	print '-c           disable color output'
+	print '-p <file>    use the specified access_profile output file'
+	print '             to display use counts for only instrumented types'
 	print ''
 	print 'the dwarfdump tool is a dependency and need to be'
 	print 'installed on your system. On Mac OS X you may need dsymutil'
@@ -486,6 +554,25 @@ def process_dwarf_file(input_file):
 
 	return True
 
+def parse_profile(it):
+
+	ret = {}
+	m = 0;
+	for l in it:
+		if l.strip() == '': break
+
+		if not l.startswith('   '):
+			print 'incorrect profiler file format'
+			sys.exit(1)
+		offset, count = l.strip().split(':')
+		offset = int(offset)
+		count = int(count)
+		if count > m: m = count
+
+		ret[offset] = count
+	ret['max'] = m
+	return ret
+
 # parse command line arguments
 i = 1
 
@@ -493,6 +580,17 @@ while i < len(sys.argv):
 	a = sys.argv[i]
 	if a == '-a': show_standard_types = True
 	elif a == '-c': color_output = False
+	elif a == '-p':
+		i += 1
+		profile_file = sys.argv[i]
+		f = open(profile_file, 'r')
+		profile = {}
+		it = iter(f)
+		print it.next() # skip the first blank line
+		for l in it:
+			name = l.strip()
+			profile[name] = parse_profile(it)
+		f.close()
 	else: break
 	i += 1
 
