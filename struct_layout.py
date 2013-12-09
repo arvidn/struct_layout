@@ -42,6 +42,7 @@ prof_max = 0
 
 show_standard_types = False
 color_output = True
+cache_line_size = 64
 
 class DwarfBase:
 
@@ -90,9 +91,9 @@ class DwarfTypedef(DwarfBase):
 		if self._underlying_type == 0: return False
 		return self._types[self._underlying_type].has_fields()
 
-	def print_fields(self, offset, expected, indent, prof):
+	def print_fields(self, offset, expected, indent, prof, cache_lines):
 		if self._underlying_type == 0: return 0
-		return self._types[self._underlying_type].print_fields(offset, expected, indent, prof)
+		return self._types[self._underlying_type].print_fields(offset, expected, indent, prof, cache_lines)
 
 	def match(self, f):
 		if self._underlying_type == 0: return False
@@ -220,19 +221,32 @@ class DwarfMember:
 		else:
 			self._name = '<base-class>'
 
-	def print_field(self, offset, expected, indent, prof):
+	def print_field(self, offset, expected, indent, prof, cache_lines):
 		t = self._types[self._underlying_type]
 		num_padding = (self._offset + offset) - expected
 		global color_output
+		global prof_max
+		global barcolor
+		global restore
+		global padcolor
+		global cachecol
 
 		if prof != None:
 			# access profile mode
 			if t.has_fields():
 				name_field = '%s%s' % ((' ' * indent), self._name)
-				print '%-91s|' % name_field
 				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size() \
 					and t.has_fields():
-					return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+					print '      %-91s|' % name_field
+					return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
+				else:
+					cache_line = ''
+					cache_line_prefix = ''
+					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
+						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line_prefix = cachecol
+						cache_lines.append((self._offset + offset) / cache_line_size)
+					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
 				return self._offset + offset + t.size()
 			else:
 
@@ -240,14 +254,7 @@ class DwarfMember:
 				if self._name == '<base-class>':
 					return self._offset + offset + t.size()
 
-				if color_output:
-					col = '\x1b[33m'
-					restore = '\x1b[0m'
-				else:
-					col = ''
-					restore = ''
 				num_printed = 0
-				global prof_max
 				while len(prof) > 0 and prof[0][0] < self._offset + offset + t.size():
 					cnt = prof[0][1]
 					member_offset = prof[0][0] - self._offset - offset
@@ -255,32 +262,55 @@ class DwarfMember:
 					else: moff = ''
 					name_field = '%s%s%s' % ((' ' * indent), self._name, moff)
 					if len(name_field) > 30: name_field = name_field[:30]
-					print '%-30s %s%8d: %s%s| ' % (\
+
+					cache_line = ''
+					cache_line_prefix = ''
+					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
+						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line_prefix = cachecol
+						cache_lines.append((self._offset + offset) / cache_line_size)
+
+					print '%s%5d %-30s %s%8d: %s%s| %s' % ( \
+						cache_line_prefix, \
+						self._offset + offset, \
 						name_field, \
-						col, cnt, \
+						barcolor, cnt, \
 						print_bar(cnt, prof_max), restore, \
-						)
+						cache_line)
 					num_printed += 1
 					del prof[0]
 				if num_printed == 0:
 					name_field = '%s%s' % ((' ' * indent), self._name)
-					print '%-91s|' % name_field
+
+					cache_line = ''
+					cache_line_prefix = ''
+					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
+						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line_prefix = cachecol
+						cache_lines.append((self._offset + offset) / cache_line_size)
+
+					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
 
 			return self._offset + offset + t.size()
 		else:
 			# normal struct layout mode
 			if num_padding > 0:
-				if color_output:
-					print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
-				else:
-					print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
+				print '%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore)
 				expected = self._offset + offset
 
 			if t.has_fields():
 				print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
-				return t.print_fields(self._offset + offset, expected, indent + 1, prof)
+				return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 			else:
-				print '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
+
+				cache_line = ''
+				cache_line_prefix = ''
+				if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
+					cache_line = ' -- {cache-line %d}%s' % ((self._offset + offset) / cache_line_size, restore)
+					cache_line_prefix = cachecol
+					cache_lines.append((self._offset + offset) / cache_line_size)
+
+				print '%s%5d: %s[%s : %d] %s %s' % (cache_line_prefix, self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name, cache_line)
 				return self._offset + offset + t.size()
 
 class DwarfStructType(DwarfBase):
@@ -329,7 +359,11 @@ class DwarfStructType(DwarfBase):
 	def print_struct(self):
 		if self._declaration: return
 
+		global structcolor
+		global restore
+		global padcolor
 		global profile
+
 		prof = None
 		if profile != None:
 			prof_name = '%s::%s' % (self._scope, self._name)
@@ -342,24 +376,17 @@ class DwarfStructType(DwarfBase):
 					prof.append((k, v))
 				prof = sorted(prof)
 
-		global color_output
-		if color_output:
-			print '\nstruct \x1b[1m%s::%s\x1b[0m [%d Bytes]' % (self._scope, self._name, self._size)
-		else:
-			print '\nstruct %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
-		expected = self.print_fields(0, 0, 0, prof)
+		print '\nstruct %s%s::%s%s [%d Bytes]' % (structcolor, self._scope, self._name, restore, self._size)
+		expected = self.print_fields(0, 0, 0, prof, [])
 
 		if profile == None:
 			num_padding = (self._size) - expected
 			if num_padding > 0:
-				if color_output:
-					print '\x1b[41m   --- %d Bytes padding --- %s\x1b[0m' % (num_padding, (' ' * 60))
-				else:
-					print '   --- %d Bytes padding --- %s' % (num_padding, (' ' * 60))
+				print '%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore)
 
-	def print_fields(self, offset, expected, indent, prof):
+	def print_fields(self, offset, expected, indent, prof, cache_lines):
 		for f in self._fields:
-			expected = max(expected, f.print_field(offset, expected, indent, prof))
+			expected = max(expected, f.print_field(offset, expected, indent, prof, cache_lines))
 		return expected
 
 	def has_fields(self):
@@ -392,7 +419,7 @@ class DwarfUnionType(DwarfStructType):
 
 	def print_struct(self):
 		print '\nunion %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
-		self.print_fields(0, 0, 0, None)
+		self.print_fields(0, 0, 0, None, [])
 
 class DwarfMemberPtrType(DwarfTypedef):
 
@@ -679,6 +706,21 @@ i += 1
 if len(sys.argv) > i:
 	filter_str = sys.argv[i]
 	i += 1
+
+# set up these global variables controlling
+# colors of different components
+if color_output:
+	barcolor = '\x1b[33m'
+	restore = '\x1b[0m'
+	padcolor = '\x1b[41m'
+	structcolor = '\x1b[1m'
+	cachecol = '\x1b[44m'
+else:
+	barcolor = ''
+	restore = ''
+	padcolor = ''
+	structcolor = ''
+	cachecol = ''
 
 # if it fails, it may be because we're on Mac OS and
 # trying to read debug symbols from an executable
