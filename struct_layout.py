@@ -488,30 +488,47 @@ def parse_recursive(lno, lines):
 	item['children'] = children
 	return lno, item
 
-def collect_types(tree, scope, types):
+def collect_types(tree, scope, types, typedefs):
+
+	if 'AT_name' in tree['fields']:
+		inner_scope = scope + '::' + tree['fields']['AT_name']
+	else:
+		inner_scope = scope + '::' + '(anonymous)'
 
 	if tree['tag'] in tag_to_type:
-		types[tree['addr']] = tag_to_type[tree['tag']](tree, scope, types)
+
+		declaration = 'AT_declaration' in tree['fields']
+
+		# this is necessary. For some reason, the base class reference
+		# can sometimes refer to a declaration of the subclass instead
+		# of the definition of it, even when the definition is available.
+		# this simply replaces all declarations with the definition if
+		# the definition has been seen.
+		if declaration and inner_scope in typedefs and \
+			'AT_name' in tree['fields'] and \
+			(tree['tag'] == 'TAG_structure_type' or tree['tag'] == 'TAG_class_type'):
+			obj = typedefs[inner_scope]
+		else:
+			obj = tag_to_type[tree['tag']](tree, scope, types)
+			if not declaration:
+				typedefs[inner_scope] = obj
+
+		types[tree['addr']] = obj
 
 	if tree['tag'] == 'TAG_namespace' \
 		or tree['tag'] == 'TAG_structure_type' \
 		or tree['tag'] == 'TAG_class_type' \
 		or tree['tag'] == 'TAG_union_type':
 
-		if not 'AT_name' in tree['fields']:
-			inner_scope = scope + '::' + '(anonymous)'
-		else:
-			inner_scope = scope + '::' + tree['fields']['AT_name']
-
 		if 'children' in tree:
 			for c in tree['children']:
-				collect_types(c, inner_scope, types)
+				collect_types(c, inner_scope, types, typedefs)
 	
 	elif tree['tag'] == 'TAG_compile_unit' \
 		or tree['tag'] == 'TAG_subprogram':
 		if 'children' in tree:
 			for c in tree['children']:
-				collect_types(c, scope, types)
+				collect_types(c, scope, types, typedefs)
 
 def print_bar(val, maximum):
 
@@ -565,7 +582,14 @@ def process_dwarf_file(input_file):
 
 	f = subprocess.Popen(['dwarfdump', input_file], stdout=subprocess.PIPE)
 
+	# types maps addresses to types
 	types = {}
+
+	# typedefs maps fully qualiied names of
+	# types to their address, but only complete
+	# types, not declarations. This is used to rewrite
+	# links to declarations to definitions when available
+	typedefs = {}
 
 	lines = []
 
@@ -594,7 +618,7 @@ def process_dwarf_file(input_file):
 		if tree != None: items.append(tree)
 	
 	for i in items:
-		collect_types(i, '', types)
+		collect_types(i, '', types, typedefs)
 
 	already_printed = set()
 
