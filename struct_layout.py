@@ -235,9 +235,10 @@ class DwarfMember:
 			# access profile mode
 			if t.has_fields():
 				name_field = '%s%s' % ((' ' * indent), self._name)
-				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size() \
-					and t.has_fields():
-					print '      %-91s|' % name_field
+
+				if t.has_fields():
+					if self._name != '<base-class>':
+						print '      %-91s|' % name_field
 					return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 				else:
 					cache_line = ''
@@ -246,6 +247,7 @@ class DwarfMember:
 						cache_line = '%scache-line %d' % (restore, (self._offset + offset) / cache_line_size)
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
+
 					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
 				return self._offset + offset + t.size()
 			else:
