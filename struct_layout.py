@@ -43,7 +43,24 @@ prof_max = 0
 show_standard_types = False
 color_output = True
 
-class DwarfTypedef:
+class DwarfBase:
+
+	def has_fields(self):
+		return False
+
+	def size(self):
+		return 0
+
+	def match(self, f):
+		return False
+
+	def print_struct(self):
+		pass
+
+	def full_name(self):
+		return ''
+
+class DwarfTypedef(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
@@ -63,6 +80,12 @@ class DwarfTypedef:
 		else:
 			return self._types[self._underlying_type].name()
 
+	def full_name(self):
+		if self._underlying_type == 0:
+			return 'void'
+		else:
+			return self._types[self._underlying_type].full_name()
+
 	def has_fields(self):
 		if self._underlying_type == 0: return False
 		return self._types[self._underlying_type].has_fields()
@@ -79,25 +102,13 @@ class DwarfTypedef:
 		if self._underlying_type == 0: return
 		self._types[self._underlying_type].print_struct()
 
-class DwarfVoidType:
+class DwarfVoidType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		pass
 
 	def name(self):
 		return 'void'
-
-	def has_fields(self):
-		return False
-
-	def size(self):
-		return 0
-
-	def match(self, f):
-		return False
-
-	def print_struct(self):
-		pass
 
 class DwarfConstType(DwarfTypedef):
 
@@ -121,7 +132,7 @@ class DwarfPointerType(DwarfTypedef):
 	def has_fields(self):
 		return False
 
-class DwarfFunPtrType:
+class DwarfFunPtrType(DwarfBase):
 
 # TODO: support function signatures (for function pointers)
 
@@ -157,7 +168,7 @@ class DwarfRVReferenceType(DwarfReferenceType):
 	def name(self):
 		return DwarfTypedef.name(self) + '&&'
 
-class DwarfArrayType:
+class DwarfArrayType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
@@ -177,15 +188,7 @@ class DwarfArrayType:
 	def name(self):
 		return self._types[self._underlying_type].name() + '[%d]' % self._num_elements
 
-	def has_fields(self):
-		return False
-
-	def print_struct(self):
-		pass
-
-	def match(self, f): return False
-
-class DwarfBaseType:
+class DwarfBaseType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
@@ -201,14 +204,6 @@ class DwarfBaseType:
 
 	def name(self):
 		return self._name
-
-	def has_fields(self):
-		return False
-
-	def print_struct(self):
-		pass
-
-	def match(self, f): return False
 
 class DwarfEnumType(DwarfBaseType):
 
@@ -287,7 +282,7 @@ class DwarfMember:
 				print '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
 				return self._offset + offset + t.size()
 
-class DwarfStructType:
+class DwarfStructType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
@@ -329,6 +324,9 @@ class DwarfStructType:
 
 	def name(self):
 		return self._name
+
+	def full_name(self):
+		return '%s::%s' % (self._scope, self._name)
 
 	def print_struct(self):
 		if self._declaration: return
@@ -600,9 +598,13 @@ def process_dwarf_file(input_file):
 	for i in items:
 		collect_types(i, '', types)
 
+	already_printed = set()
+
 	for a,t in types.items():
+		if t.full_name() in already_printed: continue
 		if not t.match(filter_str): continue
 		t.print_struct()
+		already_printed.add(t.full_name())
 
 	return True
 
