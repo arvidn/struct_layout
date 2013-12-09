@@ -243,7 +243,7 @@ class DwarfMember:
 					cache_line = ''
 					cache_line_prefix = ''
 					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
-						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line = '%scache-line %d' % (restore, (self._offset + offset) / cache_line_size)
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
 					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
@@ -266,7 +266,7 @@ class DwarfMember:
 					cache_line = ''
 					cache_line_prefix = ''
 					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
-						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line = '%scache-line %d' % (restore, (self._offset + offset) / cache_line_size)
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
 
@@ -285,7 +285,7 @@ class DwarfMember:
 					cache_line = ''
 					cache_line_prefix = ''
 					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
-						cache_line = 'cache-line %d%s' % ((self._offset + offset) / cache_line_size, restore)
+						cache_line = '%scache-line %d' % (restore, (self._offset + offset) / cache_line_size)
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
 
