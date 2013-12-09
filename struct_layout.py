@@ -229,7 +229,7 @@ class DwarfMember:
 			# access profile mode
 			if t.has_fields():
 				name_field = '%s%s' % ((' ' * indent), self._name)
-				print '%-81s|' % name_field
+				print '%-91s|' % name_field
 				if len(prof) > 0 and prof[0][0] < self._offset + offset + t.size() \
 					and t.has_fields():
 					return t.print_fields(self._offset + offset, expected, indent + 1, prof)
@@ -254,7 +254,8 @@ class DwarfMember:
 					if member_offset != 0: moff = '%+d' % member_offset
 					else: moff = ''
 					name_field = '%s%s%s' % ((' ' * indent), self._name, moff)
-					print '%-20s %s%8d: %s%s| ' % (\
+					if len(name_field) > 30: name_field = name_field[:30]
+					print '%-30s %s%8d: %s%s| ' % (\
 						name_field, \
 						col, cnt, \
 						print_bar(cnt, prof_max), restore, \
@@ -263,7 +264,7 @@ class DwarfMember:
 					del prof[0]
 				if num_printed == 0:
 					name_field = '%s%s' % ((' ' * indent), self._name)
-					print '%-81s|' % name_field
+					print '%-91s|' % name_field
 
 			return self._offset + offset + t.size()
 		else:
@@ -298,9 +299,6 @@ class DwarfStructType(DwarfBase):
 			self._name = item['fields']['AT_name']
 		else:
 			self._name = '(anonymous)'
-
-		# TODO: parse out inherited types
-		# TAG_inheritance / AT_type / AT_data_member_location
 
 		self._fields = []
 		if not 'children' in item: return
