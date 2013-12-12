@@ -234,22 +234,12 @@ class DwarfMember:
 		if prof != None:
 			# access profile mode
 			if t.has_fields():
-				name_field = '%s%s' % ((' ' * indent), self._name)
 
-				if t.has_fields():
-					if self._name != '<base-class>':
-						print '      %-91s|' % name_field
-					return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
-				else:
-					cache_line = ''
-					cache_line_prefix = ''
-					if len(cache_lines) == 0 or cache_lines[-1] < (self._offset + offset) / cache_line_size:
-						cache_line = '%scache-line %d' % (restore, (self._offset + offset) / cache_line_size)
-						cache_line_prefix = cachecol
-						cache_lines.append((self._offset + offset) / cache_line_size)
+				if self._name == '<base-class>': name = '<base-class> %s' % t.name()
+				else: name = self._name
+				name_field = '%s%s' % ((' ' * indent), name)
 
-					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
-				return self._offset + offset + t.size()
+				return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 			else:
 
 				# a base class with no members. don't waste space by printing it
@@ -312,7 +302,8 @@ class DwarfMember:
 					cache_line_prefix = cachecol
 					cache_lines.append((self._offset + offset) / cache_line_size)
 
-				print '%s%5d: %s[%s : %d] %s %s' % (cache_line_prefix, self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name, cache_line)
+				l = '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
+				print '%s%-70s%s' % (cache_line_prefix, l, cache_line)
 				return self._offset + offset + t.size()
 
 class DwarfStructType(DwarfBase):
@@ -539,7 +530,14 @@ def collect_types(tree, scope, types, typedefs):
 			obj = typedefs[inner_scope]
 		else:
 			obj = tag_to_type[tree['tag']](tree, scope, types)
+
+			# if this is a complete type and we've previously seen a
+			# declaration, update the declaration to this
 			if not declaration:
+				if inner_scope in typedefs:
+					decl = typedefs[inner_scope]
+					if hasattr(decl, '_underlying_type'):
+						tag_to_type[decl._underlying_type] = obj
 				typedefs[inner_scope] = obj
 
 		types[tree['addr']] = obj
