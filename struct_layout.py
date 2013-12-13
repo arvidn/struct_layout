@@ -238,6 +238,7 @@ class DwarfMember:
 				if self._name == '<base-class>': name = '<base-class> %s' % t.name()
 				else: name = self._name
 				name_field = '%s%s' % ((' ' * indent), name)
+				print '      %-91s|' % name_field
 
 				return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 			else:
