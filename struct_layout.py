@@ -43,6 +43,7 @@ prof_max = 0
 show_standard_types = False
 color_output = True
 cache_line_size = 64
+terminal_width = 80
 
 class DwarfBase:
 
@@ -304,7 +305,7 @@ class DwarfMember:
 					cache_lines.append((self._offset + offset) / cache_line_size)
 
 				l = '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
-				print '%s%-70s%s' % (cache_line_prefix, l, cache_line)
+				print '%s%-*s%s' % (cache_line_prefix, terminal_width - len(cache_line) - 1, l, cache_line)
 				return self._offset + offset + t.size()
 
 class DwarfStructType(DwarfBase):
@@ -591,6 +592,28 @@ def print_bar(val, maximum):
 
 	return s.encode('utf-8')
 
+def get_terminal_size():
+    import os
+    env = os.environ
+    def ioctl_GWINSZ(fd):
+        try:
+            import fcntl, termios, struct, os
+            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,
+        '1234'))
+        except:
+            return
+        return cr
+    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+    if not cr:
+        try:
+            fd = os.open(os.ctermid(), os.O_RDONLY)
+            cr = ioctl_GWINSZ(fd)
+            os.close(fd)
+        except:
+            pass
+    if not cr:
+        cr = (env.get('LINES', 25), env.get('COLUMNS', 80))
+    return int(cr[1]), int(cr[0])
 
 def print_usage():
 	print 'usage: %s [options] exe-file [name-prefix-filter]\n' % sys.argv[0]
@@ -687,6 +710,8 @@ def parse_profile(it):
 
 		ret[offset] = count
 	return ret
+
+(terminal_width, h) = get_terminal_size()
 
 # parse command line arguments
 i = 1
