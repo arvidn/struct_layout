@@ -527,19 +527,30 @@ def collect_types(tree, scope, types, typedefs):
 		# the definition has been seen.
 		if declaration and inner_scope in typedefs and \
 			'AT_name' in tree['fields'] and \
-			(tree['tag'] == 'TAG_structure_type' or tree['tag'] == 'TAG_class_type'):
-			obj = typedefs[inner_scope]
+			'def' in typedefs[inner_scope]:
+			# use an existing (fully defined) object instead of
+			# creating another declaration object
+			obj = typedefs[inner_scope]['def']
 		else:
+			# construct a new object
 			obj = tag_to_type[tree['tag']](tree, scope, types)
+
+			if not inner_scope in typedefs: typedefs[inner_scope] = {}
 
 			# if this is a complete type and we've previously seen a
 			# declaration, update the declaration to this
 			if not declaration:
 				if inner_scope in typedefs:
-					decl = typedefs[inner_scope]
-					if hasattr(decl, '_underlying_type'):
-						tag_to_type[decl._underlying_type] = obj
-				typedefs[inner_scope] = obj
+					if 'decl' in typedefs[inner_scope]:
+						for decl in typedefs[inner_scope]['decl']:
+							types[decl] = obj
+				typedefs[inner_scope]['def'] = obj
+			else:
+				# add this to the declaration list
+				if not 'decl' in typedefs[inner_scope]:
+					typedefs[inner_scope]['decl'] = [tree['addr']]
+				else:
+					typedefs[inner_scope]['decl'].append(tree['addr'])
 
 		types[tree['addr']] = obj
 
