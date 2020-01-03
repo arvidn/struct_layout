@@ -242,7 +242,7 @@ class DwarfMember:
 				if self._name == '<base-class>': name = '<base-class> %s' % t.name()
 				else: name = self._name
 				name_field = '%s%s' % ((' ' * indent), name)
-				print '      %-91s|' % name_field
+				print('      %-91s|' % name_field)
 
 				return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 			else:
@@ -267,13 +267,13 @@ class DwarfMember:
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
 
-					print '%s%5d %-30s %s%8d: %s%s| %s' % ( \
+					print('%s%5d %-30s %s%8d: %s%s| %s' % ( \
 						cache_line_prefix, \
 						self._offset + offset, \
 						name_field, \
 						barcolor, cnt, \
 						print_bar(cnt, prof_max), restore, \
-						cache_line)
+						cache_line))
 					num_printed += 1
 					del prof[0]
 				if num_printed == 0:
@@ -286,17 +286,17 @@ class DwarfMember:
 						cache_line_prefix = cachecol
 						cache_lines.append((self._offset + offset) / cache_line_size)
 
-					print '%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line)
+					print('%s%5d %-91s| %s' % (cache_line_prefix, self._offset + offset, name_field, cache_line))
 
 			return self._offset + offset + t.size()
 		else:
 			# normal struct layout mode
 			if num_padding > 0:
-				print '%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore)
+				print('%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore))
 				expected = self._offset + offset
 
 			if t.has_fields():
-				print '     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name)
+				print('     : %s[%s : %d] %s' % (('  ' * indent), t.name(), t.size(), self._name))
 				return t.print_fields(self._offset + offset, expected, indent + 1, prof, cache_lines)
 			else:
 
@@ -308,7 +308,7 @@ class DwarfMember:
 					cache_lines.append((self._offset + offset) / cache_line_size)
 
 				l = '%5d: %s[%s : %d] %s' % (self._offset + offset, ('  ' * indent), t.name(), t.size(), self._name)
-				print '%s%-*s%s' % (cache_line_prefix, terminal_width - len(cache_line) - 1, l, cache_line)
+				print('%s%-*s%s' % (cache_line_prefix, terminal_width - len(cache_line) - 1, l, cache_line))
 				return self._offset + offset + t.size()
 
 class DwarfStructType(DwarfBase):
@@ -339,8 +339,8 @@ class DwarfStructType(DwarfBase):
 					continue
 
 				self._fields.append(DwarfMember(m, types))
-		except Exception, e:
-			print 'EXCEPTION! %s: ' % self._name , e
+		except Exception as e:
+			print('EXCEPTION! %s: ' % self._name , e)
 			pass
 
 		self._fields = sorted(self._fields, key=attrgetter('_offset'))
@@ -374,13 +374,13 @@ class DwarfStructType(DwarfBase):
 					prof.append((k, v))
 				prof = sorted(prof)
 
-		print '\nstruct %s%s::%s%s [%d Bytes]' % (structcolor, self._scope, self._name, restore, self._size)
+		print('\nstruct %s%s::%s%s [%d Bytes]' % (structcolor, self._scope, self._name, restore, self._size))
 		expected = self.print_fields(0, 0, 0, prof, [])
 
 		if profile == None:
 			num_padding = (self._size) - expected
 			if num_padding > 0:
-				print '%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore)
+				print('%s   --- %d Bytes padding --- %s%s' % (padcolor, num_padding, (' ' * 60), restore))
 
 	def print_fields(self, offset, expected, indent, prof, cache_lines):
 		for f in self._fields:
@@ -416,7 +416,7 @@ class DwarfUnionType(DwarfStructType):
 		return 'union ' + DwarfStructType.name(self)
 
 	def print_struct(self):
-		print '\nunion %s::%s [%d Bytes]' % (self._scope, self._name, self._size)
+		print('\nunion %s::%s [%d Bytes]' % (self._scope, self._name, self._size))
 		self.print_fields(0, 0, 0, None, [])
 
 class DwarfMemberPtrType(DwarfTypedef):
@@ -622,33 +622,33 @@ def get_terminal_size():
     return int(cr[1]), int(cr[0])
 
 def print_usage():
-	print 'usage: %s [options] exe-file [name-prefix-filter]\n' % sys.argv[0]
-	print 'exe-file must have DWARF debug symbols in it. It'
-	print 'may be an object file, shared library or executable. On Mac'
-	print 'dsymutils will be invoked for files with no direct debug symbols'
-	print 'in them.'
-	print ''
-	print 'name-prefix-filter is an optional argument. When'
-	print 'specified, only types whose prefix matches this are'
-	print 'printed. Names are fully qualified and start with ::'
-	print 'to denote the global scope.'
-	print ''
-	print 'OPTIONS'
-	print '-a           print all types, including standard library'
-	print '             and implementation detail types'
-	print '-c           disable color output'
-	print '-p <file>    use the specified access_profile output file'
-	print '             to display use counts for only instrumented types'
-	print ''
-	print 'the dwarfdump tool is a dependency and need to be'
-	print 'installed on your system. On Mac OS X you may need dsymutil'
-	print 'in order to link debug symbols together'
+	print('usage: %s [options] exe-file [name-prefix-filter]\n' % sys.argv[0])
+	print('exe-file must have DWARF debug symbols in it. It')
+	print('may be an object file, shared library or executable. On Mac')
+	print('dsymutils will be invoked for files with no direct debug symbols')
+	print('in them.')
+	print('')
+	print('name-prefix-filter is an optional argument. When')
+	print('specified, only types whose prefix matches this are')
+	print('printed. Names are fully qualified and start with ::')
+	print('to denote the global scope.')
+	print('')
+	print('OPTIONS')
+	print('-a           print all types, including standard library')
+	print('             and implementation detail types')
+	print('-c           disable color output')
+	print('-p <file>    use the specified access_profile output file')
+	print('             to display use counts for only instrumented types')
+	print('')
+	print('the dwarfdump tool is a dependency and need to be')
+	print('installed on your system. On Mac OS X you may need dsymutil')
+	print('in order to link debug symbols together')
 	sys.exit(1)
 
 def process_dwarf_file(input_file):
 	global pointer_size
 
-	f = subprocess.Popen(['dwarfdump', input_file], stdout=subprocess.PIPE)
+	f = subprocess.Popen(['dwarfdump', input_file], stdout=subprocess.PIPE, universal_newlines=True)
 
 	# types maps addresses to types
 	types = {}
@@ -706,7 +706,7 @@ def parse_profile(it):
 		if l.strip() == '': break
 
 		if not l.startswith('   '):
-			print 'incorrect profiler file format'
+			print('incorrect profiler file format')
 			sys.exit(1)
 		offset, count = l.strip().split(':')
 		offset = int(offset)
@@ -732,7 +732,7 @@ while i < len(sys.argv):
 		f = open(profile_file, 'r')
 		profile = {}
 		it = iter(f)
-		print it.next() # skip the first blank line
+		print(it.next()) # skip the first blank line
 		for l in it:
 			name = l.strip()
 			profile[name] = parse_profile(it)
