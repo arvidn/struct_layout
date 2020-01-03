@@ -67,8 +67,8 @@ class DwarfTypedef(DwarfBase):
 	def __init__(self, item, scope, types):
 		self._scope = scope
 		self._types = types
-		if 'AT_type' in item['fields']:
-			self._underlying_type = item['fields']['AT_type']
+		if 'DW_AT_type' in item['fields']:
+			self._underlying_type = item['fields']['DW_AT_type'].split()[0]
 		else:
 			# this means "void"
 			self._underlying_type = 0
@@ -174,14 +174,17 @@ class DwarfArrayType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
-		if 'AT_upper_bound' in item['children'][0]['fields']:
-			self._num_elements = int(item['children'][0]['fields']['AT_upper_bound'], 16) + 1
+		child_fields = item['children'][0]['fields']
+		if 'DW_AT_upper_bound' in child_fields:
+			self._num_elements = int(child_fields['DW_AT_upper_bound'], 16) + 1
+		elif 'DW_AT_count' in child_fields:
+			self._num_elements = int(child_fields['DW_AT_count'], 16) + 1
 		else:
 			# this means indeterminate number of items
 			# (i.e. basically a regular pointer)
 			self._num_elements = -1
 
-		self._underlying_type = item['fields']['AT_type']
+		self._underlying_type = item['fields']['DW_AT_type'].split()[0]
 		self._types = types
 
 	def size(self):
@@ -194,12 +197,12 @@ class DwarfBaseType(DwarfBase):
 
 	def __init__(self, item, scope, types):
 		self._scope = scope
-		if 'AT_name' in item['fields']:
-			self._name = item['fields']['AT_name']
+		if 'DW_AT_name' in item['fields']:
+			self._name = item['fields']['DW_AT_name']
 		else:
 			self._name = '(anonymous)'
 
-		self._size = int(item['fields']['AT_byte_size'], 16)
+		self._size = int(item['fields'].get('DW_AT_byte_size', '0'), 16)
 
 	def size(self):
 		return self._size
@@ -215,10 +218,10 @@ class DwarfEnumType(DwarfBaseType):
 class DwarfMember:
 	def __init__(self, item, types):
 		self._types = types
-		self._underlying_type = item['fields']['AT_type']
-		self._offset = int(item['fields']['AT_data_member_location'])
-		if 'AT_name' in item['fields']:
-			self._name = item['fields']['AT_name']
+		self._underlying_type = item['fields']['DW_AT_type'].split()[0]
+		self._offset = int(item['fields']['DW_AT_data_member_location'].split()[1], 0)
+		if 'DW_AT_name' in item['fields']:
+			self._name = item['fields']['DW_AT_name']
 		else:
 			self._name = '<base-class>'
 
@@ -313,15 +316,15 @@ class DwarfStructType(DwarfBase):
 	def __init__(self, item, scope, types):
 		self._scope = scope
 		self._types = types
-		self._declaration = 'AT_declaration' in item['fields']
+		self._declaration = 'DW_AT_declaration' in item['fields']
 
-		if 'AT_declaration' in item['fields']:
+		if 'DW_AT_declaration' in item['fields']:
 			self._size = 0
 		else:
-			self._size = int(item['fields']['AT_byte_size'], 16)
+			self._size = int(item['fields'].get('DW_AT_byte_size', '0'), 16)
 
-		if 'AT_name' in item['fields']:
-			self._name = item['fields']['AT_name']
+		if 'DW_AT_name' in item['fields']:
+			self._name = item['fields']['DW_AT_name']
 		else:
 			self._name = '(anonymous)'
 
@@ -330,9 +333,9 @@ class DwarfStructType(DwarfBase):
 
 		try:
 			for m in item['children']:
-				if m['tag'] != 'TAG_member' \
-					and m['tag'] != 'TAG_inheritance': continue
-				if not 'AT_data_member_location' in m['fields']:
+				if m['tag'] != 'DW_TAG_member' \
+					and m['tag'] != 'DW_TAG_inheritance': continue
+				if not 'DW_AT_data_member_location' in m['fields']:
 					continue
 
 				self._fields.append(DwarfMember(m, types))
@@ -420,7 +423,7 @@ class DwarfMemberPtrType(DwarfTypedef):
 
 	def __init__(self, item, scope, types):
 		DwarfTypedef.__init__(self, item, scope, types)
-		self._class_type = item['fields']['AT_containing_type']
+		self._class_type = item['fields']['DW_AT_containing_type']
 
 	def size(self):
 		global pointer_size
@@ -432,21 +435,21 @@ class DwarfMemberPtrType(DwarfTypedef):
 	def match(self, f): return False
 
 tag_to_type = {
-	'TAG_base_type': DwarfBaseType,
-	'TAG_pointer_type': DwarfPointerType,
-	'TAG_reference_type': DwarfReferenceType,
-	'TAG_rvalue_reference_type': DwarfRVReferenceType,
-	'TAG_typedef': DwarfTypedef,
-	'TAG_array_type': DwarfArrayType,
-	'TAG_const_type': DwarfConstType,
-	'TAG_volatile_type': DwarfVolatileType,
-	'TAG_structure_type': DwarfStructType,
-	'TAG_class_type': DwarfStructType,
-	'TAG_ptr_to_member_type': DwarfMemberPtrType,
-	'TAG_enumeration_type': DwarfEnumType,
-	'TAG_subroutine_type': DwarfFunPtrType,
-	'TAG_union_type': DwarfUnionType,
-	'TAG_unspecified_type': DwarfVoidType,
+	'DW_TAG_base_type': DwarfBaseType,
+	'DW_TAG_pointer_type': DwarfPointerType,
+	'DW_TAG_reference_type': DwarfReferenceType,
+	'DW_TAG_rvalue_reference_type': DwarfRVReferenceType,
+	'DW_TAG_typedef': DwarfTypedef,
+	'DW_TAG_array_type': DwarfArrayType,
+	'DW_TAG_const_type': DwarfConstType,
+	'DW_TAG_volatile_type': DwarfVolatileType,
+	'DW_TAG_structure_type': DwarfStructType,
+	'DW_TAG_class_type': DwarfStructType,
+	'DW_TAG_ptr_to_member_type': DwarfMemberPtrType,
+	'DW_TAG_enumeration_type': DwarfEnumType,
+	'DW_TAG_subroutine_type': DwarfFunPtrType,
+	'DW_TAG_union_type': DwarfUnionType,
+	'DW_TAG_unspecified_type': DwarfVoidType,
 }
 
 def parse_tag(lno, lines):
@@ -463,14 +466,15 @@ def parse_tag(lno, lines):
 	except:
 		return (lno, None)
 
-	has_children = l.endswith('*')
+	old_indent = l.find(" DW_")
 
 	while lno < len(lines) and lines[lno].strip() != '':
 		l = lines[lno].strip()
 		lno += 1
 		try:
 			key, value = l.split('(', 1)
-			value = value.strip().split(')',1)[0].strip()
+			key = key.strip()
+			value = value.strip().split(')',1)[0]
 		except:
 			continue
 
@@ -481,7 +485,9 @@ def parse_tag(lno, lines):
 		# content of the brackets
 		if len(value) > 0 and value[0] == '{':
 			value = value.split('}')[0][1:]
-		fields[key] = value
+		fields[key] = value.strip()
+
+	has_children = old_indent > 0 and lno + 1 < len(lines) and lines[lno + 1].find(" DW_") > old_indent
 
 	return (lno, {'fields': fields, 'tag': tag, 'addr': addr, 'has_children': has_children})
 
@@ -512,14 +518,14 @@ def parse_recursive(lno, lines):
 
 def collect_types(tree, scope, types, typedefs):
 
-	if 'AT_name' in tree['fields']:
-		inner_scope = scope + '::' + tree['fields']['AT_name']
+	if 'DW_AT_name' in tree['fields']:
+		inner_scope = scope + '::' + tree['fields']['DW_AT_name']
 	else:
 		inner_scope = scope + '::' + '(anonymous)'
 
 	if tree['tag'] in tag_to_type:
 
-		declaration = 'AT_declaration' in tree['fields']
+		declaration = 'DW_AT_declaration' in tree['fields']
 
 		# this is necessary. For some reason, the base class reference
 		# can sometimes refer to a declaration of the subclass instead
@@ -527,7 +533,7 @@ def collect_types(tree, scope, types, typedefs):
 		# this simply replaces all declarations with the definition if
 		# the definition has been seen.
 		if declaration and inner_scope in typedefs and \
-			'AT_name' in tree['fields'] and \
+			'DW_AT_name' in tree['fields'] and \
 			'def' in typedefs[inner_scope]:
 			# use an existing (fully defined) object instead of
 			# creating another declaration object
@@ -555,17 +561,17 @@ def collect_types(tree, scope, types, typedefs):
 
 		types[tree['addr']] = obj
 
-	if tree['tag'] == 'TAG_namespace' \
-		or tree['tag'] == 'TAG_structure_type' \
-		or tree['tag'] == 'TAG_class_type' \
-		or tree['tag'] == 'TAG_union_type':
+	if tree['tag'] == 'DW_TAG_namespace' \
+		or tree['tag'] == 'DW_TAG_structure_type' \
+		or tree['tag'] == 'DW_TAG_class_type' \
+		or tree['tag'] == 'DW_TAG_union_type':
 
 		if 'children' in tree:
 			for c in tree['children']:
 				collect_types(c, inner_scope, types, typedefs)
-	
-	elif tree['tag'] == 'TAG_compile_unit' \
-		or tree['tag'] == 'TAG_subprogram':
+
+	elif tree['tag'] == 'DW_TAG_compile_unit' \
+		or tree['tag'] == 'DW_TAG_subprogram':
 		if 'children' in tree:
 			for c in tree['children']:
 				collect_types(c, scope, types, typedefs)
