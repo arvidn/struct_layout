@@ -219,7 +219,7 @@ class DwarfMember:
 	def __init__(self, item, types):
 		self._types = types
 		self._underlying_type = item['fields']['DW_AT_type'].split()[0]
-		self._offset = int(item['fields']['DW_AT_data_member_location'].split()[1], 0)
+		self._offset = int(item['fields']['DW_AT_data_member_location'], 0)
 		if 'DW_AT_name' in item['fields']:
 			self._name = item['fields']['DW_AT_name']
 		else:
